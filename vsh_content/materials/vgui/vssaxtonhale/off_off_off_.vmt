@@ -1,0 +1,11 @@
+"UnlitGeneric"
+{
+	"$baseTexture" "vgui\vssaxtonhale\off_off_off_"
+	"$translucent" 1
+	"$ignorez" 1
+	"%keywords" "tf"
+	
+	"$basetexturetransform" "center 0.97 0.945 scale 3.15 6 rotate 0 translate 0 0"
+}
+
+ 
