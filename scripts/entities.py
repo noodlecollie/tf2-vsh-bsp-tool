@@ -1,60 +1,24 @@
+from . import keyvalues
+
 def build_entity_list(ent_data: bytes):
 	ent_list = []
 	base_offset = 0
 
 	while True:
-		begin_brace = ent_data.find(b'{', base_offset)
+		try:
+			(property_list, next_offset) = keyvalues.extract_single_depth_properties(ent_data, base_offset)
+		except RuntimeError as ex:
+			raise RuntimeError(f"{ex} for entity {len(ent_list)}")
 
-		if begin_brace < 0:
+		if next_offset < 1:
+			# We reached the end.
 			break
 
-		end_brace = ent_data.find(b'}', begin_brace + 1)
+		if not keyvalues.contains_key(property_list, "classname"):
+			property_list.append(("classname", "unknown_class"))
 
-		if end_brace < 0:
-			raise RuntimeError(f"Unterminated definition encountered for entity {len(ent_list)}")
-
-		entity = ent_data[(begin_brace + 1):end_brace]
-
-		# Each property is defined as: "key" "value"\n
-		properties = entity.split(b'\n')
-		property_dict = {}
-
-		for prop in properties:
-			prop = prop.strip()
-
-			if not prop:
-				continue
-
-			first_quote = prop.find(b'"', 0)
-
-			if first_quote < 0:
-				continue
-
-			second_quote = prop.find(b'"', first_quote + 1)
-
-			if second_quote < 0:
-				raise RuntimeError(f"Unterminated property key encountered for entity {len(ent_list)}")
-
-			third_quote = prop.find(b'"', second_quote + 1)
-
-			if third_quote < 0:
-				raise RuntimeError(f"Property without value encountered for entity {len(ent_list)}")
-
-			fourth_quote = prop.find(b'"', third_quote + 1)
-
-			if fourth_quote < 0:
-				raise RuntimeError(f"Unterminated property value encountered for entity {len(ent_list)}")
-
-			key = prop[(first_quote + 1):second_quote].decode("latin-1")
-			value = prop[(third_quote + 1):fourth_quote].decode("latin-1")
-
-			property_dict[key] = value
-
-		if "classname" not in property_dict:
-			property_dict["classname"] = "unknown_class"
-
-		ent_list.append(property_dict)
-		base_offset = end_brace + 1
+		ent_list.append(property_list)
+		base_offset = next_offset
 
 	return ent_list
 
@@ -65,10 +29,9 @@ def find_entities_matching(ent_list: list, **kwargs):
 		entity = ent_list[index]
 
 		for key in kwargs.keys():
-			if key not in entity:
-				continue
+			value = keyvalues.get_first_value(entity, key)
 
-			if entity[key] != kwargs[key]:
+			if value is None or value != kwargs[key]:
 				continue
 
 			found_ents.append(index)

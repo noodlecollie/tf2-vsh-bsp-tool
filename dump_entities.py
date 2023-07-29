@@ -2,7 +2,7 @@ import argparse
 import os
 import sys
 
-from scripts import bsp, entities
+from scripts import bsp, entities, keyvalues
 
 def parse_args():
 	parser = argparse.ArgumentParser(
@@ -29,14 +29,15 @@ def main():
 
 	filter_properties = {}
 
-	for item in args.property:
-		(key, value) = item.split("=", maxsplit=1)
+	if args.property is not None:
+		for item in args.property:
+			(key, value) = item.split("=", maxsplit=1)
 
-		if not key or not value:
-			print(f'Invalid property filter "{item}", ignoring')
-			continue
+			if not key or not value:
+				print(f'Invalid property filter "{item}", ignoring')
+				continue
 
-		filter_properties[key] = value
+			filter_properties[key] = value
 
 	with open(map_file, "rb") as bsp_file:
 		bsp.validate_bsp_file(bsp_file)
@@ -47,21 +48,20 @@ def main():
 		for index in range(0, len(ent_list)):
 			entity = ent_list[index]
 
-			if "classname" not in entity:
-				entity["classname"] = "<unknown>"
-
 			should_print = True
 
 			for key in filter_properties.keys():
-				if key not in entity or entity[key] != filter_properties[key]:
+				ent_value = keyvalues.get_first_value(entity, key)
+
+				if ent_value is None or ent_value != filter_properties[key]:
 					should_print = False
 					break
 
 			if not should_print:
 				continue
 
-			classname = entity["classname"]
-			targetname = entity["targetname"] if "targetname" in entity else ""
+			classname = keyvalues.get_first_value(entity, "classname")
+			targetname = keyvalues.get_first_value(entity, "targetname", default_val="")
 
 			title = f"[{index}] {classname}"
 
@@ -74,11 +74,11 @@ def main():
 
 			print(title)
 
-			for key in entity.keys():
-				if key == "classname" or key == "targetname":
+			for prop in entity:
+				if prop[0] == "classname" or prop[0] == "targetname":
 					continue
 
-				print(f'  "{key}" = "{entity[key]}"')
+				print(f'  "{prop[0]}" = "{prop[1]}"')
 
 			have_printed = True
 
