@@ -1,4 +1,5 @@
 import struct
+import lzma
 
 # Format info taken from https://developer.valvesoftware.com/wiki/BSP_(Source_1)
 
@@ -15,6 +16,15 @@ LUMP_TABLE_NUM_ENTRIES = 64
 LUMP_FMT = "<iiii"
 
 LUMP_INDEX_ENTITIES = 0
+
+LZMA_LUMP_FMT = "<IIIBBBBB"
+LZMA_TARGET_FMT = "<BBBBBQ"
+
+def decompress_lzma_lump(data):
+	(_, actual_size, _, prop0, prop1, prop2, prop3, prop4) = struct.unpack_from(LZMA_LUMP_FMT, data, 0)
+	genuine_lzma_header = struct.pack(LZMA_TARGET_FMT, prop0, prop1, prop2, prop3, prop4, actual_size)
+
+	return lzma.decompress(genuine_lzma_header + data[struct.calcsize(LZMA_LUMP_FMT):])
 
 def validate_bsp_file(bsp_file):
 	bsp_file.seek(VBSP_IDENT_OFFSET)
@@ -33,12 +43,6 @@ def validate_bsp_file(bsp_file):
 			f"BSP version was incorrect (expected {VBSP_VERSION} but got {version}). " +
 			"This is probably not a TF2 map.")
 
-	lump = get_lump_descriptor(bsp_file, LUMP_INDEX_ENTITIES)
-
-	# If this is not a zero string, it means compression is present.
-	if lump[3] != 0:
-		raise NotImplementedError("Support for maps with LZMA compressed entity lumps has not yet been added.")
-
 def get_lump_descriptor(bsp_file, index: int):
 	if index < 0 or index >= LUMP_TABLE_NUM_ENTRIES:
 		raise IndexError(f"Lump index {index} was out of range")
@@ -48,6 +52,8 @@ def get_lump_descriptor(bsp_file, index: int):
 	return struct.unpack(LUMP_FMT, data)
 
 def get_lump_data(bsp_file, index: int):
-	(offset, length, _, _) = get_lump_descriptor(bsp_file, index)
+	(offset, length, _, lzma_flags) = get_lump_descriptor(bsp_file, index)
 	bsp_file.seek(offset)
-	return bsp_file.read(length)
+	data = bsp_file.read(length)
+
+	return decompress_lzma_lump(data) if lzma_flags else data

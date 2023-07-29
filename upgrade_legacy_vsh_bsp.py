@@ -26,7 +26,8 @@ def create_game_rules_entity():
 		"classname": "tf_gamerules",
 		"targetname": "tf_gamerules",
 		"ctf_overtime": 1,
-		"hud_type": 0
+		"hud_type": 0,
+		"origin": "0 0 0"
 	}
 
 def create_logic_script_entity():
@@ -34,7 +35,8 @@ def create_logic_script_entity():
 	{
 		"classname": "logic_script",
 		"targetname": "logic_script_vsh",
-		"vscripts": "vssaxtonhale/vsh.nut"
+		"vscripts": "vssaxtonhale/vsh.nut",
+		"origin": "0 0 0"
 	}
 
 def remove_unneeded_entities(ent_list):
