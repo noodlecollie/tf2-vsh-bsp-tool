@@ -97,6 +97,7 @@ def file_requires_merge(path_in_archive: str, filename: str):
 	return path_in_archive == "maps" and (filename.endswith("level_sounds.txt") or filename.endswith("particles.txt"))
 
 def add_files_to_pak(pakdata_in, pakdata_out, map_name: str):
+	# TODO: We also need to add any existing files from the BSP into the output pak
 	with zipfile.ZipFile(pakdata_out, mode="w") as pakzip_out:
 		with zipfile.ZipFile(pakdata_in, mode="r") as pakzip_in:
 			content_path = os.path.join(SCRIPT_DIR, "vsh_content")
@@ -113,23 +114,33 @@ def add_files_to_pak(pakdata_in, pakdata_out, map_name: str):
 					else:
 						pak.try_write_disk_file(pakzip_out, file_path_on_disk, file_path_in_bsp)
 
+def replace_pak_lump(bsp_file, pakdata_out):
+	(offset, _, version, lzma_flags) = bsp.get_lump_descriptor(bsp_file, bsp.LUMP_INDEX_PAKFILE)
+	bsp.set_lump_descriptor(bsp_file, bsp.LUMP_INDEX_PAKFILE, offset, len(pakdata_out.getbuffer()), version, lzma_flags)
+
+	bsp_file.seek(offset)
+	bsp_file.write(pakdata_out.getbuffer())
+
+	# TODO: Remove me once tested
+	with open("test.bsp", "wb") as outfile:
+		outfile.write(bsp_file.getbuffer())
+
 def process_bsp(map_name: str, bsp_file):
 	bsp.validate_bsp_file(bsp_file)
 	bsp.validate_pakfile_lump(bsp_file)
+
+	pakdata_in = io.BytesIO(bsp.get_lump_data(bsp_file, bsp.LUMP_INDEX_PAKFILE))
+	pakdata_out = io.BytesIO(bytes())
+
+	add_files_to_pak(pakdata_in, pakdata_out, map_name)
+	replace_pak_lump(bsp_file, pakdata_out)
 
 	ent_list = entities.build_entity_list(bsp.get_lump_data(bsp_file, bsp.LUMP_INDEX_ENTITIES))
 
 	remove_unneeded_entities(ent_list)
 	add_required_entities(ent_list)
 
-	pakdata_in = io.BytesIO(bsp.get_lump_data(bsp_file, bsp.LUMP_INDEX_PAKFILE))
-	pakdata_out = io.BytesIO(bytes())
-
-	add_files_to_pak(pakdata_in, pakdata_out, map_name)
-
-	# REMOVE ME once testing is complete:
-	with open("temp.zip", "wb") as outfile:
-		outfile.write(pakdata_out.getbuffer())
+	# TODO: Write entities lump back in, and adjust all other lumps and offsets (ugh)
 
 def process_file(map_file: str):
 	if not os.path.isfile(map_file):
@@ -141,12 +152,14 @@ def process_file(map_file: str):
 	map_name = os.path.splitext(os.path.basename(map_file))[0]
 
 	with open(map_file, "rb") as bsp_file:
-		try:
-			process_bsp(map_name, bsp_file)
-		except Exception as ex:
-			print(f"An error occured while processing the file. {ex}")
-			traceback.print_exception(ex)
-			return False
+		data = bsp_file.read()
+
+	try:
+		process_bsp(map_name, io.BytesIO(data))
+	except Exception as ex:
+		print(f"An error occured while processing the file. {ex}")
+		traceback.print_exception(ex)
+		return False
 
 	return True
 

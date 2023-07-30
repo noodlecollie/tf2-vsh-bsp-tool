@@ -78,6 +78,18 @@ def get_lump_descriptor(bsp_file, index: int):
 	data = bsp_file.read(struct.calcsize(LUMP_FMT))
 	return struct.unpack(LUMP_FMT, data)
 
+def set_lump_descriptor(bsp_file, index: int, offset: int, length: int, version: int, flags: int):
+	if index < 0 or index >= LUMP_TABLE_NUM_ENTRIES:
+		raise IndexError(f"Lump index {index} was out of range")
+
+	descriptor = struct.pack(LUMP_FMT, offset, length, version, flags)
+
+	# Simply seeking and writing new bytes does seem to replace existing
+	# bytes rather than inserting them, given that we're using an io.BytesIO
+	# wrapper around the file data.
+	bsp_file.seek(LUMP_TABLE_OFFSET + (index * struct.calcsize(LUMP_FMT)))
+	bsp_file.write(descriptor)
+
 def get_lump_data(bsp_file, index: int):
 	(offset, length, _, lzma_flags) = get_lump_descriptor(bsp_file, index)
 	bsp_file.seek(offset)
