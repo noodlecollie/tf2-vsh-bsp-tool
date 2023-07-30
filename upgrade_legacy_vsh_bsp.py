@@ -5,7 +5,7 @@ import traceback
 import io
 import zipfile
 
-from scripts import bsp, entities, keyvalues, file_merge, pak
+from scripts import bsp, entities, keyvalues, file_merge, pak, lump_adjustment
 
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
 
@@ -44,19 +44,30 @@ def create_logic_script_entity():
 	]
 
 def remove_unneeded_entities(ent_list):
-	index = 0
-	while index < len(ent_list):
-		if keyvalues.get_first_value(ent_list[index], "classname") == "tf_logic_arena":
-			print("Removing tf_logic_arena")
-			del ent_list[index]
-		else:
-			index += 1
+	removed = entities.remove_entities_matching_all(ent_list, classname="tf_logic_arena")
+
+	if removed:
+		print("Removed tf_logic_arena")
 
 def add_required_entities(ent_list):
-	if not entities.find_entities_matching(ent_list, classname="tf_gamerules"):
+	gamerules_ents = entities.find_entities_matching_all(ent_list, classname="tf_gamerules")
+
+	if gamerules_ents:
+		entity = ent_list[gamerules_ents[0]]
+		targetname_index = keyvalues.find(entity, "targetname")
+
+		if targetname_index >= 0 and entity[targetname_index][1] != "tf_gamerules":
+			print("Updating tf_gamerules targetname for VSH")
+			entity[targetname_index][1] = "tf_gamerules"
+		else:
+			print("Updating tf_gamerules targetname for VSH")
+			entity.append(("targetname", "tf_gamerules"))
+	else:
+		print("Adding tf_gamerules for VSH")
 		ent_list.append(create_game_rules_entity())
 
-	if not entities.find_entities_matching(ent_list, classname="logic_script", vscripts="vssaxtonhale/vsh.nut"):
+	if not entities.find_entities_matching_all(ent_list, classname="logic_script", vscripts="vssaxtonhale/vsh.nut"):
+		print("Adding logic_script for VSH")
 		ent_list.append(create_logic_script_entity())
 
 def merge_level_sounds_txt(pakzip_in, archive_file_path: str, disk_file_path: str):
@@ -283,7 +294,7 @@ def process_bsp(map_name: str, bsp_file):
 
 	print(f"Entities lump size changed by {'+' if ent_data_size_delta >= 0 else ''}{ent_data_size_delta} bytes")
 
-	adjust_lump_locations(bsp_file, ent_data_size_delta)
+	lump_adjustment.adjust_non_entity_lump_locations(bsp_file, ent_data_size_delta)
 
 	print("Writing new entities lump")
 	write_new_entities_lump(bsp_file, ent_data, ent_orig_length)
