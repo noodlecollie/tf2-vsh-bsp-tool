@@ -96,23 +96,34 @@ def merge_files(pakzip_in, pakzip_out, map_name: str, path_on_disk: str, dir_in_
 def file_requires_merge(path_in_archive: str, filename: str):
 	return path_in_archive == "maps" and (filename.endswith("level_sounds.txt") or filename.endswith("particles.txt"))
 
-def add_files_to_pak(pakdata_in, pakdata_out, map_name: str):
+def find_content_files_on_disk():
+	content_path = os.path.join(SCRIPT_DIR, "vsh_content")
+	out_list = []
+
+	for (dirpath, dirnames, filenames) in os.walk(content_path):
+		dir_in_pak = os.path.relpath(dirpath, content_path)
+
+		for filename in filenames:
+			file_path_on_disk = os.path.join(dirpath, filename)
+			file_path_in_pak = os.path.join(dir_in_pak, filename)
+
+			out_list.append((file_path_in_pak, file_path_on_disk))
+
+	return out_list
+
+def add_files_to_pak(file_list, pakdata_in, pakdata_out, map_name: str):
 	# TODO: We also need to add any existing files from the BSP into the output pak
 	with zipfile.ZipFile(pakdata_out, mode="w") as pakzip_out:
 		with zipfile.ZipFile(pakdata_in, mode="r") as pakzip_in:
-			content_path = os.path.join(SCRIPT_DIR, "vsh_content")
+			for (pak_path, disk_path) in file_list:
+				file_name = os.path.basename(pak_path)
+				dir_in_pak = os.path.dirname(pak_path)
 
-			for (dirpath, dirnames, filenames) in os.walk(content_path):
-				dir_in_pak = os.path.relpath(dirpath, content_path)
-
-				for filename in filenames:
-					file_path_on_disk = os.path.join(dirpath, filename)
-					file_path_in_bsp = os.path.join(dir_in_pak, filename)
-
-					if file_requires_merge(dir_in_pak, filename):
-						merge_files(pakzip_in, pakzip_out, map_name, file_path_on_disk, dir_in_pak)
-					else:
-						pak.try_write_disk_file(pakzip_out, file_path_on_disk, file_path_in_bsp)
+				if file_requires_merge(dir_in_pak, file_name):
+					merge_files(pakzip_in, pakzip_out, map_name, disk_path, dir_in_pak)
+				else:
+					print(f"Embedding {pak_path}")
+					pak.try_write_disk_file(pakzip_out, disk_path, pak_path)
 
 def replace_pak_lump(bsp_file, pakdata_out):
 	(offset, _, version, lzma_flags) = bsp.get_lump_descriptor(bsp_file, bsp.LUMP_INDEX_PAKFILE)
@@ -132,7 +143,7 @@ def process_bsp(map_name: str, bsp_file):
 	pakdata_in = io.BytesIO(bsp.get_lump_data(bsp_file, bsp.LUMP_INDEX_PAKFILE))
 	pakdata_out = io.BytesIO(bytes())
 
-	add_files_to_pak(pakdata_in, pakdata_out, map_name)
+	add_files_to_pak(find_content_files_on_disk(), pakdata_in, pakdata_out, map_name)
 	replace_pak_lump(bsp_file, pakdata_out)
 
 	ent_list = entities.build_entity_list(bsp.get_lump_data(bsp_file, bsp.LUMP_INDEX_ENTITIES))
