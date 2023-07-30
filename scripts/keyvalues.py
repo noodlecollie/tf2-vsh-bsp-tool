@@ -48,6 +48,13 @@ def extract_single_depth_properties(data: bytes, base_offset: int = 0):
 
 	return (out_list, end_brace + 1)
 
+def serialise_single_depth_properties(kv_list, indent=0):
+	indent_str = b"\t" * indent
+
+	entry_strings = [(indent_str + b'"' + entry[0].encode("latin-1") + b'" "' + entry[1].encode("latin-1") + b'"') for entry in kv_list]
+
+	return b"{\n" + b'\n'.join(entry_strings) + b"\n}"
+
 def contains_key(props_list, key:str):
 	return find(props_list, key) >= 0
 

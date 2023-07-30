@@ -22,6 +22,10 @@ def build_entity_list(ent_data: bytes):
 
 	return ent_list
 
+def serialise_entity_list(ent_list):
+	serialised_ents = [keyvalues.serialise_single_depth_properties(entity) for entity in ent_list]
+	return b'\n'.join(serialised_ents)
+
 def find_entities_matching(ent_list: list, **kwargs):
 	found_ents = []
 

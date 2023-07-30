@@ -29,8 +29,8 @@ def create_game_rules_entity():
 	[
 		("classname", "tf_gamerules"),
 		("targetname", "tf_gamerules"),
-		("ctf_overtime", 1),
-		("hud_type", 0),
+		("ctf_overtime", "1"),
+		("hud_type", "0"),
 		("origin", "0 0 0")
 	]
 
@@ -192,9 +192,19 @@ def replace_pak_lump(bsp_file, pakdata_out):
 	bsp_file.seek(offset)
 	bsp_file.write(pakdata_out.getbuffer())
 
-	# TODO: Remove me once tested
-	with open("test.bsp", "wb") as outfile:
-		outfile.write(bsp_file.getbuffer())
+def apply_new_entities_lump_and_adjust_offsets(bsp_file, ent_list):
+	(ent_offset, ent_size, ent_version, ent_flags) = bsp.get_lump_descriptor(bsp_file, bsp.LUMP_INDEX_ENTITIES)
+
+	# Null terminator here is important!
+	serialised_entities = entities.serialise_entity_list(ent_list) + b'\x00'
+	new_size = len(serialised_entities)
+
+	if new_size >= ent_size:
+		print(f"Entities lump grew by {new_size - ent_size} bytes")
+	else:
+		print(f"Entities lump shrank by {ent_size - new_size} bytes")
+
+	# TODO: Continue from here
 
 def process_bsp(map_name: str, bsp_file):
 	bsp.validate_bsp_file(bsp_file)
@@ -214,8 +224,7 @@ def process_bsp(map_name: str, bsp_file):
 	ent_list = entities.build_entity_list(bsp.get_lump_data(bsp_file, bsp.LUMP_INDEX_ENTITIES))
 	remove_unneeded_entities(ent_list)
 	add_required_entities(ent_list)
-
-	# TODO: Write entities lump back in, and adjust all other lumps and offsets (ugh)
+	apply_new_entities_lump_and_adjust_offsets(bsp_file, ent_list)
 
 def process_file(map_file: str):
 	if not os.path.isfile(map_file):

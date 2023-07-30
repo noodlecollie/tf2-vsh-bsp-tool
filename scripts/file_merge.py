@@ -43,6 +43,5 @@ def merge_particles_txt_data(existing_data: bytes, new_data: bytes):
 		raise RuntimeError(f"{ex} in the VSH game mode's particles.txt")
 
 	combined_entries = existing_particle_entries + new_particle_entries
-	entry_strings = [(b'\t"' + entry[0].encode("latin-1") + b'"\t"' + entry[1].encode("latin-1") + b'"') for entry in combined_entries]
 
-	return b"particles_manifest\n{\n" + b'\n'.join(entry_strings) + b"\n}\n"
+	return b"particles_manifest\n" + keyvalues.serialise_single_depth_properties(combined_entries, indent=1) + b"\n"
