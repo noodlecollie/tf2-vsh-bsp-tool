@@ -20,7 +20,11 @@ LZMA_LUMP_FMT = "<IIIBBBBB"
 LZMA_TARGET_FMT = "<BBBBBQ"
 
 LUMP_INDEX_ENTITIES = 0
+LUMP_INDEX_GAMELUMPS = 35
 LUMP_INDEX_PAKFILE = 40
+
+LUMP_GAMELUMPS_FMT = "<i"
+LUMP_GAMELUMPS_DIRENT_FMT = "<iHHii"
 
 def __index_of_lump_with_largest_offset(bsp_file):
 	largest_offset = -1
@@ -124,3 +128,22 @@ def get_lump_data(bsp_file, index: int):
 	data = bsp_file.read(length)
 
 	return decompress_lzma_lump(data) if lzma_flags else data
+
+def get_gamelumps(bsp_file):
+	(offset, length, _, _) = get_lump_descriptor(bsp_file, LUMP_INDEX_GAMELUMPS)
+
+	if length < 1:
+		return []
+
+	bsp_file.seek(offset)
+
+	data = bsp_file.read(struct.calcsize(LUMP_GAMELUMPS_FMT))
+	num_gamelumps = struct.unpack(LUMP_GAMELUMPS_FMT, data)[0]
+
+	out_gamelumps = []
+
+	for _ in range(0, num_gamelumps):
+		entry_data = bsp_file.read(struct.calcsize(LUMP_GAMELUMPS_DIRENT_FMT))
+		out_gamelumps.append(struct.unpack(LUMP_GAMELUMPS_DIRENT_FMT, entry_data))
+
+	return out_gamelumps
