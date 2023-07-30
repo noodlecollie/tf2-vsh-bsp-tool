@@ -7,6 +7,12 @@ def merge_level_sounds_txt_data(existing_data: bytes, new_data: bytes):
 def merge_particles_txt_data(existing_data: bytes, new_data: bytes):
 	# For particles, we need to merge the two particles_manifest objects together.
 
+	if not existing_data:
+		return new_data
+
+	if not new_data:
+		return existing_data
+
 	ENTRY_NAME = b"particles_manifest"
 
 	existing_manifest = existing_data.find(ENTRY_NAME)
