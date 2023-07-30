@@ -5,7 +5,7 @@ import traceback
 import io
 import zipfile
 
-from scripts import bsp, entities, keyvalues
+from scripts import bsp, entities, keyvalues, file_merge
 
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
 
@@ -59,31 +59,83 @@ def add_required_entities(ent_list):
 	if not entities.find_entities_matching(ent_list, classname="logic_script", targetname="logic_script_vsh"):
 		ent_list.append(create_logic_script_entity())
 
-def merge_files(pakfile_zip, existing_file_path, new_file_path):
-	# TODO: Continue from here
-	pass
+def pak_contains_file(pakfile_zip, path: str):
+	try:
+		pakfile_zip.getinfo(path)
+		return True
+	except:
+		return False
+
+def get_file_data_from_pak(pakfile_zip, path: str):
+	if not pak_contains_file(pakfile_zip, path):
+		return bytes()
+
+	with pakfile_zip.open(path, "r") as infile:
+			return infile.read()
+
+def try_write_disk_file_to_pak(pakfile_zip, path_on_disk: str, path_in_pak: str):
+	adjusted_path_in_pak = path_in_pak.replace("\\", "/")
+
+	try:
+		pakfile_zip.write(path_on_disk, adjusted_path_in_pak)
+	except OSError as ex:
+		raise OSError(f"Could not add {adjusted_path_in_pak} to BSP pakfile lump. {ex}")
+
+def try_write_data_to_pak(pakfile_zip, path_in_pak: str, data: bytes):
+	adjusted_path_in_pak = path_in_pak.replace("\\", "/")
+
+	try:
+		pakfile_zip.writestr(adjusted_path_in_pak, data)
+	except OSError as ex:
+		raise OSError(f"Could not add {adjusted_path_in_pak} to BSP pakfile lump. {ex}")
+
+def merge_level_sounds_txt(pakfile_zip, archive_file_path: str, disk_file_path: str):
+	existing_data = get_file_data_from_pak(pakfile_zip, archive_file_path)
+
+	with open(disk_file_path, "rb") as infile:
+		new_data = infile.read()
+
+	return file_merge.merge_level_sounds_txt_data(existing_data, new_data)
+
+def merge_particles_txt(pakfile_zip, archive_file_path: str, disk_file_path: str):
+	existing_data = get_file_data_from_pak(pakfile_zip, archive_file_path)
+
+	with open(disk_file_path, "rb") as infile:
+		new_data = infile.read()
+
+	return file_merge.merge_particles_txt_data(existing_data, new_data)
+
+def merge_files(pakfile_zip, map_name, path_on_disk: str, dir_in_pak: str):
+	filename = os.path.basename(path_on_disk)
+
+	if filename.endswith("_level_sounds.txt"):
+		target_path = os.path.join(dir_in_pak, f"{map_name}_level_sounds.txt")
+		data = merge_level_sounds_txt(pakfile_zip, target_path, path_on_disk)
+	elif filename.endswith("_particles.txt"):
+		target_path = os.path.join(dir_in_pak, f"{map_name}_particles.txt")
+		data = merge_particles_txt(pakfile_zip, target_path, path_on_disk)
+	else:
+		raise NotImplementedError(f"Unsupported request to merge data for file {path_on_disk}")
+
+	try_write_data_to_pak(pakfile_zip, target_path, data)
+
+def file_requires_merge(path_in_archive: str, filename: str):
+	return path_in_archive == "maps" and (filename.endswith("_level_sounds.txt") or filename.endswith("_particles.txt"))
 
 def add_files_to_pak(pakfile_data, map_name: str):
 	with zipfile.ZipFile(pakfile_data, mode="a") as pakfile_zip:
 		content_path = os.path.join(SCRIPT_DIR, "vsh_content")
 		for (dirpath, dirnames, filenames) in os.walk(content_path):
-			root_dir = os.path.relpath(dirpath, content_path)
+			dir_in_pak = os.path.relpath(dirpath, content_path)
 
 			for filename in filenames:
 				file_path_on_disk = os.path.join(dirpath, filename)
+				file_path_in_bsp = os.path.join(dir_in_pak, filename)
 
-				if root_dir == "maps":
-					adjusted_filename = filename.replace("MAP_NAME", map_name)
-					file_path_in_bsp = os.path.join(root_dir, adjusted_filename).replace("\\", "/")
-
-					merge_files(pakfile_zip, file_path_on_disk, file_path_in_bsp)
+				if file_requires_merge(dir_in_pak, filename):
+					merge_files(pakfile_zip, map_name, file_path_on_disk, dir_in_pak)
 				else:
-					file_path_in_bsp = os.path.join(root_dir, filename).replace("\\", "/")
-
-					try:
-						pakfile_zip.write(file_path_on_disk, file_path_in_bsp)
-					except OSError as ex:
-						raise OSError(f"Could not add {file_path_in_bsp} to BSP pakfile lump. {ex}")
+					try_write_disk_file_to_pak(pakfile_zip, file_path_on_disk, file_path_in_bsp)
 
 def process_bsp(map_name: str, bsp_file):
 	bsp.validate_bsp_file(bsp_file)
