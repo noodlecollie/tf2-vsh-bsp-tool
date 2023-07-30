@@ -5,7 +5,7 @@ import traceback
 import io
 import zipfile
 
-from scripts import bsp, entities, keyvalues, file_merge
+from scripts import bsp, entities, keyvalues, file_merge, pak
 
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
 
@@ -59,34 +59,8 @@ def add_required_entities(ent_list):
 	if not entities.find_entities_matching(ent_list, classname="logic_script", vscripts="vssaxtonhale/vsh.nut"):
 		ent_list.append(create_logic_script_entity())
 
-def pak_contains_file(pakfile_zip, path: str):
-	try:
-		pakfile_zip.getinfo(path)
-		return True
-	except:
-		return False
-
-def get_file_data_from_pak(pakfile_zip, path: str):
-	if not pak_contains_file(pakfile_zip, path):
-		return bytes()
-
-	with pakfile_zip.open(path, "r") as infile:
-			return infile.read()
-
-def try_write_disk_file_to_pak(pakfile_zip, path_on_disk: str, path_in_pak: str):
-	try:
-		pakfile_zip.write(path_on_disk, path_in_pak)
-	except OSError as ex:
-		raise OSError(f"Could not add {path_in_pak} to BSP pakfile lump. {ex}")
-
-def try_write_data_to_pak(pakfile_zip, path_in_pak: str, data: bytes):
-	try:
-		pakfile_zip.writestr(path_in_pak, data)
-	except OSError as ex:
-		raise OSError(f"Could not add {path_in_pak} to BSP pakfile lump. {ex}")
-
 def merge_level_sounds_txt(pakfile_zip, archive_file_path: str, disk_file_path: str):
-	existing_data = get_file_data_from_pak(pakfile_zip, archive_file_path)
+	existing_data = pak.get_file_data(pakfile_zip, archive_file_path)
 
 	with open(disk_file_path, "rb") as infile:
 		new_data = infile.read()
@@ -94,7 +68,7 @@ def merge_level_sounds_txt(pakfile_zip, archive_file_path: str, disk_file_path: 
 	return file_merge.merge_level_sounds_txt_data(existing_data, new_data)
 
 def merge_particles_txt(pakfile_zip, archive_file_path: str, disk_file_path: str):
-	existing_data = get_file_data_from_pak(pakfile_zip, archive_file_path)
+	existing_data = pak.get_file_data(pakfile_zip, archive_file_path)
 
 	with open(disk_file_path, "rb") as infile:
 		new_data = infile.read()
@@ -117,7 +91,7 @@ def merge_files(pakfile_zip, map_name, path_on_disk: str, dir_in_pak: str):
 	else:
 		raise NotImplementedError(f"Unsupported request to merge data for file {path_on_disk}")
 
-	try_write_data_to_pak(pakfile_zip, target_path, data)
+	pak.try_write_data(pakfile_zip, target_path, data)
 
 def file_requires_merge(path_in_archive: str, filename: str):
 	return path_in_archive == "maps" and (filename.endswith("level_sounds.txt") or filename.endswith("particles.txt"))
@@ -135,7 +109,7 @@ def add_files_to_pak(pakfile_data, map_name: str):
 				if file_requires_merge(dir_in_pak, filename):
 					merge_files(pakfile_zip, map_name, file_path_on_disk, dir_in_pak)
 				else:
-					try_write_disk_file_to_pak(pakfile_zip, file_path_on_disk, file_path_in_bsp)
+					pak.try_write_disk_file(pakfile_zip, file_path_on_disk, file_path_in_bsp)
 
 def process_bsp(map_name: str, bsp_file):
 	bsp.validate_bsp_file(bsp_file)
