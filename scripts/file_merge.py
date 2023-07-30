@@ -27,16 +27,16 @@ def merge_particles_txt_data(existing_data: bytes, new_data: bytes):
 		raise RuntimeError("No particles_manifest entry found in the VSH game mode's particles.txt")
 
 	try:
-		existing_particle_entries = keyvalues.extract_single_depth_properties(existing_data, existing_manifest + len(ENTRY_NAME))
+		(existing_particle_entries, _) = keyvalues.extract_single_depth_properties(existing_data, existing_manifest + len(ENTRY_NAME))
 	except RuntimeError as ex:
 		raise RuntimeError(f"{ex} in map's existing particles.txt")
 
 	try:
-		new_particle_entries = keyvalues.extract_single_depth_properties(new_data, new_manifest + len(ENTRY_NAME))
+		(new_particle_entries, _) = keyvalues.extract_single_depth_properties(new_data, new_manifest + len(ENTRY_NAME))
 	except RuntimeError as ex:
 		raise RuntimeError(f"{ex} in the VSH game mode's particles.txt")
 
 	combined_entries = existing_particle_entries + new_particle_entries
-	entry_strings = [(b'\t"' + entry[0] + b'"\t"' + entry[1] + b'"') for entry in combined_entries]
+	entry_strings = [(b'\t"' + entry[0].encode("latin-1") + b'"\t"' + entry[1].encode("latin-1") + b'"') for entry in combined_entries]
 
 	return b"particles_manifest\n{\n" + b'\n'.join(entry_strings) + b"\n}\n"

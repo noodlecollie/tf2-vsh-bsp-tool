@@ -59,57 +59,59 @@ def add_required_entities(ent_list):
 	if not entities.find_entities_matching(ent_list, classname="logic_script", vscripts="vssaxtonhale/vsh.nut"):
 		ent_list.append(create_logic_script_entity())
 
-def merge_level_sounds_txt(pakfile_zip, archive_file_path: str, disk_file_path: str):
-	existing_data = pak.get_file_data(pakfile_zip, archive_file_path)
+def merge_level_sounds_txt(pakzip_in, archive_file_path: str, disk_file_path: str):
+	existing_data = pak.get_file_data(pakzip_in, archive_file_path)
 
 	with open(disk_file_path, "rb") as infile:
 		new_data = infile.read()
 
 	return file_merge.merge_level_sounds_txt_data(existing_data, new_data)
 
-def merge_particles_txt(pakfile_zip, archive_file_path: str, disk_file_path: str):
-	existing_data = pak.get_file_data(pakfile_zip, archive_file_path)
+def merge_particles_txt(pakzip_in, archive_file_path: str, disk_file_path: str):
+	existing_data = pak.get_file_data(pakzip_in, archive_file_path.replace("\\", "/"))
 
 	with open(disk_file_path, "rb") as infile:
 		new_data = infile.read()
 
 	return file_merge.merge_particles_txt_data(existing_data, new_data)
 
-def merge_files(pakfile_zip, map_name, path_on_disk: str, dir_in_pak: str):
+def merge_files(pakzip_in, pakzip_out, map_name: str, path_on_disk: str, dir_in_pak: str):
 	filename = os.path.basename(path_on_disk)
 
 	if filename.endswith("level_sounds.txt"):
 		target_path = os.path.join(dir_in_pak, f"{map_name}_level_sounds.txt")
 
 		print(f"Merging VSH level sounds into {target_path}")
-		data = merge_level_sounds_txt(pakfile_zip, target_path, path_on_disk)
+		data = merge_level_sounds_txt(pakzip_in, target_path, path_on_disk)
 	elif filename.endswith("particles.txt"):
 		target_path = os.path.join(dir_in_pak, f"{map_name}_particles.txt")
 
 		print(f"Merging VSH particle references into {target_path}")
-		data = merge_particles_txt(pakfile_zip, target_path, path_on_disk)
+		data = merge_particles_txt(pakzip_in, target_path, path_on_disk)
 	else:
 		raise NotImplementedError(f"Unsupported request to merge data for file {path_on_disk}")
 
-	pak.try_write_data(pakfile_zip, target_path, data)
+	pak.try_write_data(pakzip_out, target_path, data)
 
 def file_requires_merge(path_in_archive: str, filename: str):
 	return path_in_archive == "maps" and (filename.endswith("level_sounds.txt") or filename.endswith("particles.txt"))
 
-def add_files_to_pak(pakfile_data, map_name: str):
-	with zipfile.ZipFile(pakfile_data, mode="a") as pakfile_zip:
-		content_path = os.path.join(SCRIPT_DIR, "vsh_content")
-		for (dirpath, dirnames, filenames) in os.walk(content_path):
-			dir_in_pak = os.path.relpath(dirpath, content_path)
+def add_files_to_pak(pakdata_in, pakdata_out, map_name: str):
+	with zipfile.ZipFile(pakdata_out, mode="w") as pakzip_out:
+		with zipfile.ZipFile(pakdata_in, mode="r") as pakzip_in:
+			content_path = os.path.join(SCRIPT_DIR, "vsh_content")
 
-			for filename in filenames:
-				file_path_on_disk = os.path.join(dirpath, filename)
-				file_path_in_bsp = os.path.join(dir_in_pak, filename)
+			for (dirpath, dirnames, filenames) in os.walk(content_path):
+				dir_in_pak = os.path.relpath(dirpath, content_path)
 
-				if file_requires_merge(dir_in_pak, filename):
-					merge_files(pakfile_zip, map_name, file_path_on_disk, dir_in_pak)
-				else:
-					pak.try_write_disk_file(pakfile_zip, file_path_on_disk, file_path_in_bsp)
+				for filename in filenames:
+					file_path_on_disk = os.path.join(dirpath, filename)
+					file_path_in_bsp = os.path.join(dir_in_pak, filename)
+
+					if file_requires_merge(dir_in_pak, filename):
+						merge_files(pakzip_in, pakzip_out, map_name, file_path_on_disk, dir_in_pak)
+					else:
+						pak.try_write_disk_file(pakzip_out, file_path_on_disk, file_path_in_bsp)
 
 def process_bsp(map_name: str, bsp_file):
 	bsp.validate_bsp_file(bsp_file)
@@ -120,12 +122,14 @@ def process_bsp(map_name: str, bsp_file):
 	remove_unneeded_entities(ent_list)
 	add_required_entities(ent_list)
 
-	pakfile_data = io.BytesIO(bsp.get_lump_data(bsp_file, bsp.LUMP_INDEX_PAKFILE))
-	add_files_to_pak(pakfile_data, map_name)
+	pakdata_in = io.BytesIO(bsp.get_lump_data(bsp_file, bsp.LUMP_INDEX_PAKFILE))
+	pakdata_out = io.BytesIO(bytes())
+
+	add_files_to_pak(pakdata_in, pakdata_out, map_name)
 
 	# REMOVE ME once testing is complete:
 	with open("temp.zip", "wb") as outfile:
-		outfile.write(pakfile_data.getbuffer())
+		outfile.write(pakdata_out.getbuffer())
 
 def process_file(map_file: str):
 	if not os.path.isfile(map_file):
