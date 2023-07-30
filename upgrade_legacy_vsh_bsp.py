@@ -56,7 +56,7 @@ def add_required_entities(ent_list):
 	if not entities.find_entities_matching(ent_list, classname="tf_gamerules"):
 		ent_list.append(create_game_rules_entity())
 
-	if not entities.find_entities_matching(ent_list, classname="logic_script", targetname="logic_script_vsh"):
+	if not entities.find_entities_matching(ent_list, classname="logic_script", vscripts="vssaxtonhale/vsh.nut"):
 		ent_list.append(create_logic_script_entity())
 
 def pak_contains_file(pakfile_zip, path: str):
@@ -74,20 +74,16 @@ def get_file_data_from_pak(pakfile_zip, path: str):
 			return infile.read()
 
 def try_write_disk_file_to_pak(pakfile_zip, path_on_disk: str, path_in_pak: str):
-	adjusted_path_in_pak = path_in_pak.replace("\\", "/")
-
 	try:
-		pakfile_zip.write(path_on_disk, adjusted_path_in_pak)
+		pakfile_zip.write(path_on_disk, path_in_pak)
 	except OSError as ex:
-		raise OSError(f"Could not add {adjusted_path_in_pak} to BSP pakfile lump. {ex}")
+		raise OSError(f"Could not add {path_in_pak} to BSP pakfile lump. {ex}")
 
 def try_write_data_to_pak(pakfile_zip, path_in_pak: str, data: bytes):
-	adjusted_path_in_pak = path_in_pak.replace("\\", "/")
-
 	try:
-		pakfile_zip.writestr(adjusted_path_in_pak, data)
+		pakfile_zip.writestr(path_in_pak, data)
 	except OSError as ex:
-		raise OSError(f"Could not add {adjusted_path_in_pak} to BSP pakfile lump. {ex}")
+		raise OSError(f"Could not add {path_in_pak} to BSP pakfile lump. {ex}")
 
 def merge_level_sounds_txt(pakfile_zip, archive_file_path: str, disk_file_path: str):
 	existing_data = get_file_data_from_pak(pakfile_zip, archive_file_path)
@@ -108,11 +104,15 @@ def merge_particles_txt(pakfile_zip, archive_file_path: str, disk_file_path: str
 def merge_files(pakfile_zip, map_name, path_on_disk: str, dir_in_pak: str):
 	filename = os.path.basename(path_on_disk)
 
-	if filename.endswith("_level_sounds.txt"):
+	if filename.endswith("level_sounds.txt"):
 		target_path = os.path.join(dir_in_pak, f"{map_name}_level_sounds.txt")
+
+		print(f"Merging VSH level sounds into {target_path}")
 		data = merge_level_sounds_txt(pakfile_zip, target_path, path_on_disk)
-	elif filename.endswith("_particles.txt"):
+	elif filename.endswith("particles.txt"):
 		target_path = os.path.join(dir_in_pak, f"{map_name}_particles.txt")
+
+		print(f"Merging VSH particle references into {target_path}")
 		data = merge_particles_txt(pakfile_zip, target_path, path_on_disk)
 	else:
 		raise NotImplementedError(f"Unsupported request to merge data for file {path_on_disk}")
@@ -120,7 +120,7 @@ def merge_files(pakfile_zip, map_name, path_on_disk: str, dir_in_pak: str):
 	try_write_data_to_pak(pakfile_zip, target_path, data)
 
 def file_requires_merge(path_in_archive: str, filename: str):
-	return path_in_archive == "maps" and (filename.endswith("_level_sounds.txt") or filename.endswith("_particles.txt"))
+	return path_in_archive == "maps" and (filename.endswith("level_sounds.txt") or filename.endswith("particles.txt"))
 
 def add_files_to_pak(pakfile_data, map_name: str):
 	with zipfile.ZipFile(pakfile_data, mode="a") as pakfile_zip:
