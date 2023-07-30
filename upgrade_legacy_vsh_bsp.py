@@ -49,26 +49,35 @@ def remove_unneeded_entities(ent_list):
 	if removed:
 		print("Removed tf_logic_arena")
 
+	return removed
+
 def add_required_entities(ent_list):
+	changed = False
 	gamerules_ents = entities.find_entities_matching_all(ent_list, classname="tf_gamerules")
 
 	if gamerules_ents:
 		entity = ent_list[gamerules_ents[0]]
 		targetname_index = keyvalues.find(entity, "targetname")
 
-		if targetname_index >= 0 and entity[targetname_index][1] != "tf_gamerules":
-			print("Updating tf_gamerules targetname for VSH")
-			entity[targetname_index][1] = "tf_gamerules"
-		else:
-			print("Updating tf_gamerules targetname for VSH")
+		if targetname_index < 0:
+			print("Setting tf_gamerules targetname for VSH")
 			entity.append(("targetname", "tf_gamerules"))
+			changed = True
+		elif entity[targetname_index][1] != "tf_gamerules":
+			print(f'Updating tf_gamerules targetname for VSH from "{entity[targetname_index][1]}"')
+			entity[targetname_index][1] = "tf_gamerules"
+			changed = True
 	else:
 		print("Adding tf_gamerules for VSH")
 		ent_list.append(create_game_rules_entity())
+		changed = True
 
 	if not entities.find_entities_matching_all(ent_list, classname="logic_script", vscripts="vssaxtonhale/vsh.nut"):
 		print("Adding logic_script for VSH")
 		ent_list.append(create_logic_script_entity())
+		changed = True
+
+	return changed
 
 def merge_level_sounds_txt(pakzip_in, archive_file_path: str, disk_file_path: str):
 	existing_data = pak.get_file_data(pakzip_in, archive_file_path)
@@ -143,6 +152,9 @@ def generate_file_list(pak_dict, disk_dict):
 			print(f"Overriding {pak_path} in BSP with {disk_dict[pak_path]} on disk")
 
 		merged_dict[pak_path] = disk_dict[pak_path]
+
+	print(merged_dict)
+	raise NotImplementedError()
 
 	return [(key, merged_dict[key]) for key in merged_dict.keys()]
 
@@ -248,18 +260,20 @@ def process_bsp(map_name: str, bsp_file):
 	print("Adjusting entities")
 
 	ent_list = entities.build_entity_list(bsp.get_lump_data(bsp_file, bsp.LUMP_INDEX_ENTITIES))
-	remove_unneeded_entities(ent_list)
-	add_required_entities(ent_list)
 
-	ent_data, ent_orig_length = prepare_new_entities_lump(bsp_file, ent_list)
-	ent_data_size_delta = calculcate_raw_ent_data_size_delta(bsp_file, len(ent_data))
+	removed = remove_unneeded_entities(ent_list)
+	added = add_required_entities(ent_list)
 
-	print(f"Entities lump size changed by {'+' if ent_data_size_delta >= 0 else ''}{ent_data_size_delta} bytes")
+	if removed or added:
+		ent_data, ent_orig_length = prepare_new_entities_lump(bsp_file, ent_list)
+		ent_data_size_delta = calculcate_raw_ent_data_size_delta(bsp_file, len(ent_data))
 
-	lump_adjustment.adjust_offsets_after_lump(bsp_file, ent_data_size_delta, bsp.LUMP_INDEX_ENTITIES)
+		print(f"Entities lump size changed by {'+' if ent_data_size_delta >= 0 else ''}{ent_data_size_delta} bytes")
 
-	print("Writing new entities lump")
-	write_new_entities_lump(bsp_file, ent_data, ent_orig_length)
+		lump_adjustment.adjust_offsets_after_lump(bsp_file, ent_data_size_delta, bsp.LUMP_INDEX_ENTITIES)
+
+		print("Writing new entities lump")
+		write_new_entities_lump(bsp_file, ent_data, ent_orig_length)
 
 	# TODO: Remove after testing
 	with open("test.bsp", "wb") as outfile:
