@@ -15,6 +15,7 @@ LUMP_TABLE_OFFSET = 8
 LUMP_TABLE_NUM_ENTRIES = 64
 LUMP_FMT = "<iiii"
 
+LZMA_ID = 0x414D5A4C # Little-endian "LZMA"
 LZMA_LUMP_FMT = "<IIIBBBBB"
 LZMA_TARGET_FMT = "<BBBBBQ"
 
@@ -34,11 +35,35 @@ def __index_of_lump_with_largest_offset(bsp_file):
 
 	return index_of_largest_offset
 
-def __decompress_lzma_lump(data):
-	(_, actual_size, _, prop0, prop1, prop2, prop3, prop4) = struct.unpack_from(LZMA_LUMP_FMT, data, 0)
+def decompress_lzma_lump(compressed_data):
+	(_, actual_size, _, prop0, prop1, prop2, prop3, prop4) = struct.unpack_from(LZMA_LUMP_FMT, compressed_data, 0)
 	genuine_lzma_header = struct.pack(LZMA_TARGET_FMT, prop0, prop1, prop2, prop3, prop4, actual_size)
 
-	return lzma.decompress(genuine_lzma_header + data[struct.calcsize(LZMA_LUMP_FMT):])
+	return lzma.decompress(genuine_lzma_header + compressed_data[struct.calcsize(LZMA_LUMP_FMT):])
+
+def compress_lzma_lump(uncompressed_data):
+	compressed_data = lzma.compress(uncompressed_data)
+
+	(prop0, prop1, prop2, prop3, prop4, _) = struct.unpack_from(LZMA_TARGET_FMT, compressed_data, 0)
+
+	lump_lzma_header = struct.pack(
+		LZMA_LUMP_FMT,
+		LZMA_ID,
+		len(uncompressed_data),
+		len(compressed_data),
+		prop0,
+		prop1,
+		prop2,
+		prop3,
+		prop4)
+
+	return lump_lzma_header + compressed_data[struct.calcsize(LZMA_TARGET_FMT):]
+
+def get_lzma_lump_sizes(compressed_data):
+	atts = struct.unpack_from(LZMA_LUMP_FMT, compressed_data, 0)
+
+	# (orig size, compressed size)
+	return (atts[1], atts[2])
 
 def validate_bsp_file(bsp_file):
 	bsp_file.seek(VBSP_IDENT_OFFSET)
@@ -70,6 +95,9 @@ def validate_pakfile_lump(bsp_file):
 			f" (lump {final_lump_index} is instead). " +
 			"BSP files with this data layout are not currently supported.")
 
+def lump_is_lzma_compressed(bsp_file, index: int):
+	return get_lump_descriptor(bsp_file, index)[3] != 0
+
 def get_lump_descriptor(bsp_file, index: int):
 	if index < 0 or index >= LUMP_TABLE_NUM_ENTRIES:
 		raise IndexError(f"Lump index {index} was out of range")
@@ -95,4 +123,4 @@ def get_lump_data(bsp_file, index: int):
 	bsp_file.seek(offset)
 	data = bsp_file.read(length)
 
-	return __decompress_lzma_lump(data) if lzma_flags else data
+	return decompress_lzma_lump(data) if lzma_flags else data

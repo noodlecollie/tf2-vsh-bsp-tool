@@ -192,19 +192,71 @@ def replace_pak_lump(bsp_file, pakdata_out):
 	bsp_file.seek(offset)
 	bsp_file.write(pakdata_out.getbuffer())
 
-def apply_new_entities_lump_and_adjust_offsets(bsp_file, ent_list):
-	(ent_offset, ent_size, ent_version, ent_flags) = bsp.get_lump_descriptor(bsp_file, bsp.LUMP_INDEX_ENTITIES)
-
+def prepare_new_entities_lump(bsp_file, ent_list):
 	# Null terminator here is important!
 	serialised_entities = entities.serialise_entity_list(ent_list) + b'\x00'
-	new_size = len(serialised_entities)
+	orig_length = len(serialised_entities)
 
-	if new_size >= ent_size:
-		print(f"Entities lump grew by {new_size - ent_size} bytes")
+	if bsp.lump_is_lzma_compressed(bsp_file, bsp.LUMP_INDEX_ENTITIES):
+		serialised_entities = bsp.compress_lzma_lump(serialised_entities)
+
+	return (serialised_entities, orig_length)
+
+def calculcate_raw_ent_data_size_delta(bsp_file, new_lump_size):
+	old_lump_size = bsp.get_lump_descriptor(bsp_file, bsp.LUMP_INDEX_ENTITIES)[1]
+	return new_lump_size - old_lump_size
+
+def shift_lump(bsp_file, lump_index, delta):
+	(offset, size, version, lzma_flags) = bsp.get_lump_descriptor(bsp_file, lump_index)
+	lump_data = bsp.get_lump_data(bsp_file, lump_index)
+
+	bsp_file.seek(offset + delta)
+	bsp_file.write(lump_data)
+
+	bsp.set_lump_descriptor(bsp_file, lump_index, offset + delta, size, version, lzma_flags)
+
+def aligned_offset(offset):
+	return ((offset - 1) + (4 - ((offset - 1) % 4))) if offset > 0 else 0
+
+def adjust_lump_locations(bsp_file, delta):
+	if delta == 0:
+		return
+
+	if delta > 0:
+		delta = aligned_offset(delta)
+
+		print(f"Adjusting BSP lump offsets by {delta} bytes (with alignment) to accommodate new entities lump")
+
+		# From final lump down to lump 1 (lump 0 is ignored since it is the entity lump,
+		# which we deal with later when we write it). This process is in reverse,
+		# because I'm not sure we can easily insert into a byte stream, but we can begin
+		# from the end, expand it to make it longer, and then shuffle everything down.
+		for index in range(bsp.LUMP_TABLE_NUM_ENTRIES - 1, 0, -1):
+			shift_lump(bsp_file, index, delta)
 	else:
-		print(f"Entities lump shrank by {ent_size - new_size} bytes")
+		delta = -1 * aligned_offset(-delta)
 
-	# TODO: Continue from here
+		print(f"Adjusting BSP lump offsets by {delta} bytes (with alignment) to accommodate new entities lump")
+
+		for index in range(1, bsp.LUMP_TABLE_NUM_ENTRIES):
+			shift_lump(bsp_file, index, delta)
+
+		bsp_file.seek(delta, os.SEEK_END)
+		bsp_file.truncate()
+
+def write_new_entities_lump(bsp_file, ent_data, ent_orig_length):
+	(offset, size, version, lzma_flags) = bsp.get_lump_descriptor(bsp_file, bsp.LUMP_INDEX_ENTITIES)
+
+	size = len(ent_data)
+
+	if lzma_flags:
+		# Lump was LZMA compressed, so update this new length
+		lzma_flags = ent_orig_length
+
+	bsp_file.seek(offset)
+	bsp_file.write(ent_data)
+
+	bsp.set_lump_descriptor(bsp_file, bsp.LUMP_INDEX_ENTITIES, offset, size, version, lzma_flags)
 
 def process_bsp(map_name: str, bsp_file):
 	bsp.validate_bsp_file(bsp_file)
@@ -221,10 +273,24 @@ def process_bsp(map_name: str, bsp_file):
 	replace_pak_lump(bsp_file, pakdata_out)
 
 	print("Adjusting entities")
+
 	ent_list = entities.build_entity_list(bsp.get_lump_data(bsp_file, bsp.LUMP_INDEX_ENTITIES))
 	remove_unneeded_entities(ent_list)
 	add_required_entities(ent_list)
-	apply_new_entities_lump_and_adjust_offsets(bsp_file, ent_list)
+
+	ent_data, ent_orig_length = prepare_new_entities_lump(bsp_file, ent_list)
+	ent_data_size_delta = calculcate_raw_ent_data_size_delta(bsp_file, len(ent_data))
+
+	print(f"Entities lump size changed by {'+' if ent_data_size_delta >= 0 else ''}{ent_data_size_delta} bytes")
+
+	adjust_lump_locations(bsp_file, ent_data_size_delta)
+
+	print("Writing new entities lump")
+	write_new_entities_lump(bsp_file, ent_data, ent_orig_length)
+
+	# TODO: Remove after testing
+	with open("test.bsp", "wb") as outfile:
+		outfile.write(bsp_file.getbuffer())
 
 def process_file(map_file: str):
 	if not os.path.isfile(map_file):
