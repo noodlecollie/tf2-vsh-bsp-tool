@@ -153,9 +153,6 @@ def generate_file_list(pak_dict, disk_dict):
 
 		merged_dict[pak_path] = disk_dict[pak_path]
 
-	print(merged_dict)
-	raise NotImplementedError()
-
 	return [(key, merged_dict[key]) for key in merged_dict.keys()]
 
 def add_files_to_pak(file_list, pakdata_in, pakdata_out, map_name: str):

@@ -122,12 +122,12 @@ def set_lump_descriptor(bsp_file, index: int, offset: int, length: int, version:
 	bsp_file.seek(LUMP_TABLE_OFFSET + (index * struct.calcsize(LUMP_FMT)))
 	bsp_file.write(descriptor)
 
-def get_lump_data(bsp_file, index: int):
+def get_lump_data(bsp_file, index: int, auto_decompress: bool = True):
 	(offset, length, _, lzma_flags) = get_lump_descriptor(bsp_file, index)
 	bsp_file.seek(offset)
 	data = bsp_file.read(length)
 
-	return decompress_lzma_lump(data) if lzma_flags else data
+	return decompress_lzma_lump(data) if (lzma_flags and auto_decompress) else data
 
 def get_gamelumps(bsp_file):
 	(offset, length, _, _) = get_lump_descriptor(bsp_file, LUMP_INDEX_GAMELUMPS)

@@ -7,26 +7,31 @@ from . import bsp
 # - The offset held in each directory entry in the game lump
 
 def __aligned_offset(offset):
-	return ((offset - 1) + (4 - ((offset - 1) % 4))) if offset > 0 else 0
+	return ((offset - 1) + (4 - ((offset - 1) % 4)))
 
 def __compute_lump_ordering_by_offset(bsp_file):
 	lumps = []
 
 	for index in range(0, bsp.LUMP_TABLE_NUM_ENTRIES):
-		(offset, length, _, _) = bsp.get_lump_descriptor(bsp_file, index)
-		lumps.append((offset, length, index))
+		offset = bsp.get_lump_descriptor(bsp_file, index)[0]
+		lumps.append((offset, index))
 
 	lumps.sort(key=lambda item: item[0])
-	return [item[2] for item in lumps]
+	return [item[1] for item in lumps]
 
 def __shift_lump(bsp_file, lump_index, delta):
 	(offset, size, version, lzma_flags) = bsp.get_lump_descriptor(bsp_file, lump_index)
-	lump_data = bsp.get_lump_data(bsp_file, lump_index)
 
-	bsp_file.seek(offset + delta)
-	bsp_file.write(lump_data)
+	if size > 0:
+		lump_data = bsp.get_lump_data(bsp_file, lump_index, auto_decompress=False)
+		bsp_file.seek(offset + delta)
+		bsp_file.write(lump_data)
 
 	bsp.set_lump_descriptor(bsp_file, lump_index, offset + delta, size, version, lzma_flags)
+
+def __shift_gamelumps(bsp_file, delta):
+	# TODO
+	print(bsp.get_gamelumps(bsp_file))
 
 def adjust_offsets_after_lump(bsp_file, delta, lump_index: int):
 	if delta == 0:
@@ -38,32 +43,30 @@ def adjust_offsets_after_lump(bsp_file, delta, lump_index: int):
 	# - The final two lumps by offset are 35 (gamelumps) and 40 (pakfile)
 	# - Each gamelump is included immediately after the gamelumps listing,
 	#   before the pakfile lump begins.
-	# This means we can deal with all lumps up to the last two,
-	# and then cater for those separately.
-	ordered_lumps = ordered_lumps[:-2]
+
+	delta = __aligned_offset(delta)
+
+	print(f"Adjusting BSP lump offsets by {delta} bytes (with alignment) to accommodate new entities lump")
 
 	if delta > 0:
-		delta = __aligned_offset(delta)
-		print(f"Adjusting BSP lump offsets by {delta} bytes (with alignment) to accommodate new entities lump")
-
-		# First adjust most of the lumps:
-		for index in ordered_lumps:
-			__shift_lump(bsp_file, index, delta)
-
-		# TODO: Then deal with the edge cases
-		raise NotImplementedError()
-	else:
+		# Expanding a lump, so start from last lump and work backwards
 		ordered_lumps.reverse()
-		delta = -1 * __aligned_offset(-delta)
-		print(f"Adjusting BSP lump offsets by {delta} bytes (with alignment) to accommodate new entities lump")
 
-		# TODO: First deal with the edge cases
-		raise NotImplementedError()
+	apply = delta > 0
 
-		# Then adjust the other lumps:
-		for index in ordered_lumps:
+	for index in ordered_lumps:
+		if ordered_lumps[index] == lump_index:
+			apply = not apply
+			continue
+
+		if not apply:
+			continue
+
+		if index == bsp.LUMP_INDEX_GAMELUMPS:
+			__shift_gamelumps(bsp_file, delta)
+		else:
 			__shift_lump(bsp_file, index, delta)
 
-		# Finally, trim the file
+	if delta < 0:
 		bsp_file.seek(delta, os.SEEK_END)
 		bsp_file.truncate()
