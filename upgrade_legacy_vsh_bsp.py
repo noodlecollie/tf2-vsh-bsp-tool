@@ -14,13 +14,13 @@ def parse_args():
 		prog="upgrade_legacy_vsh_bsp",
 		description="Updates a legacy VSH (Arena) map to use the new community VSH game mode.")
 
-	parser.add_argument("map_files",
-		nargs="+",
-		help="Paths to one or more map files that should be updated.")
+	parser.add_argument("map_file",
+		nargs=1,
+		help="Paths to more map file that should be updated.")
 
-	parser.add_argument("-s", "--settings",
-		required=False,
-		help="Optional JSON file specifying VSH game mode setting overrides that should apply to this map.")
+	parser.add_argument("-x", "--no-files",
+		action="store_true",
+		help="Don't add files, just update entities")
 
 	return parser.parse_args()
 
@@ -240,19 +240,20 @@ def write_new_entities_lump(bsp_file, ent_data, ent_orig_length):
 
 	bsp.set_lump_descriptor(bsp_file, bsp.LUMP_INDEX_ENTITIES, offset, size, version, lzma_flags)
 
-def process_bsp(map_name: str, bsp_file):
+def process_bsp(map_name: str, bsp_file, args):
 	bsp.validate_bsp_file(bsp_file)
 	bsp.validate_pakfile_lump(bsp_file)
 
 	pakdata_in = io.BytesIO(bsp.get_lump_data(bsp_file, bsp.LUMP_INDEX_PAKFILE))
 	pakdata_out = io.BytesIO(bytes())
 
-	print("Compiling new list of embedded files")
-	embedded_file_list = generate_file_list(find_files_in_pak(pakdata_in), find_content_files_on_disk())
+	if not args.no_files:
+		print("Compiling new list of embedded files")
+		embedded_file_list = generate_file_list(find_files_in_pak(pakdata_in), find_content_files_on_disk())
 
-	print("Embedding files")
-	add_files_to_pak(embedded_file_list, pakdata_in, pakdata_out, map_name)
-	replace_pak_lump(bsp_file, pakdata_out)
+		print("Embedding files")
+		add_files_to_pak(embedded_file_list, pakdata_in, pakdata_out, map_name)
+		replace_pak_lump(bsp_file, pakdata_out)
 
 	print("Adjusting entities")
 
@@ -272,7 +273,9 @@ def process_bsp(map_name: str, bsp_file):
 		print("Writing new entities lump")
 		write_new_entities_lump(bsp_file, ent_data, ent_orig_length)
 
-def process_file(map_file: str):
+def process_file(args):
+	map_file = args.map_file[0]
+
 	if not os.path.isfile(map_file):
 		print(f"Map {map_file} does not exist")
 		return False
@@ -286,7 +289,7 @@ def process_file(map_file: str):
 
 	try:
 		bsp_file = io.BytesIO(data)
-		process_bsp(map_name, bsp_file)
+		process_bsp(map_name, bsp_file, args)
 
 		output_name = os.path.join(os.path.dirname(map_file), f"{map_name}_cu.bsp")
 
@@ -304,19 +307,8 @@ def process_file(map_file: str):
 
 def main():
 	args = parse_args()
-	first_iteration = True
-	all_succeeded = True
-
-	for map_file in args.map_files:
-		if not first_iteration:
-			print()
-
-		if not process_file(map_file):
-			all_succeeded = False
-
-		first_iteration = False
-
-	sys.exit(0 if all_succeeded else 1)
+	success = process_file(args)
+	sys.exit(0 if success else 1)
 
 if __name__ == "__main__":
 	main()
