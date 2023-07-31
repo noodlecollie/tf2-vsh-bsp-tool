@@ -288,6 +288,7 @@ def process_file(args):
 	print(f"Patching {map_file}")
 
 	(map_name, map_ext) = os.path.splitext(os.path.basename(map_file))
+	map_name += args.suffix
 
 	with open(map_file, "rb") as bsp_file:
 		data = bsp_file.read()
@@ -296,7 +297,7 @@ def process_file(args):
 		bsp_file = io.BytesIO(data)
 		process_bsp(map_name, bsp_file, args)
 
-		output_name = os.path.join(os.path.dirname(map_file), f"{map_name}{args.suffix}{map_ext}")
+		output_name = os.path.join(os.path.dirname(map_file), f"{map_name}{map_ext}")
 
 		print(f"Writing {output_name}")
 
