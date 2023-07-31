@@ -129,7 +129,7 @@ def get_lump_data(bsp_file, index: int, auto_decompress: bool = True):
 
 	return decompress_lzma_lump(data) if (lzma_flags and auto_decompress) else data
 
-def get_gamelumps(bsp_file):
+def get_gamelump_data(bsp_file):
 	(offset, length, _, _) = get_lump_descriptor(bsp_file, LUMP_INDEX_GAMELUMPS)
 
 	if length < 1:
@@ -139,11 +139,6 @@ def get_gamelumps(bsp_file):
 
 	data = bsp_file.read(struct.calcsize(LUMP_GAMELUMPS_FMT))
 	num_gamelumps = struct.unpack(LUMP_GAMELUMPS_FMT, data)[0]
+	gamelump_data = bsp_file.read(num_gamelumps * struct.calcsize(LUMP_GAMELUMPS_DIRENT_FMT))
 
-	out_gamelumps = []
-
-	for _ in range(0, num_gamelumps):
-		entry_data = bsp_file.read(struct.calcsize(LUMP_GAMELUMPS_DIRENT_FMT))
-		out_gamelumps.append(struct.unpack(LUMP_GAMELUMPS_DIRENT_FMT, entry_data))
-
-	return out_gamelumps
+	return (gamelump_data, num_gamelumps)

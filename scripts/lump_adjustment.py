@@ -1,4 +1,5 @@
 import os
+import struct
 
 from . import bsp
 
@@ -19,6 +20,20 @@ def __compute_lump_ordering_by_offset(bsp_file):
 	lumps.sort(key=lambda item: item[0])
 	return [item[1] for item in lumps]
 
+def __compute_gamelump_ordering_by_offset(gamelump_data, num_gamelumps):
+	lumps = []
+
+	for index in range(0, num_gamelumps):
+		offset = struct.unpack_from(
+			bsp.LUMP_GAMELUMPS_DIRENT_FMT,
+			gamelump_data,
+			index * struct.calcsize(bsp.LUMP_GAMELUMPS_DIRENT_FMT))[3]
+
+		lumps.append((offset, index))
+
+	lumps.sort(key=lambda item: item[0])
+	return [item[1] for item in lumps]
+
 def __shift_lump(bsp_file, lump_index, delta):
 	(offset, size, version, lzma_flags) = bsp.get_lump_descriptor(bsp_file, lump_index)
 
@@ -29,9 +44,61 @@ def __shift_lump(bsp_file, lump_index, delta):
 
 	bsp.set_lump_descriptor(bsp_file, lump_index, offset + delta, size, version, lzma_flags)
 
+def __shift_gamelump_data(bsp_file, delta, gamelump_data, num_gamelumps):
+	ordered_lumps = __compute_gamelump_ordering_by_offset(gamelump_data, num_gamelumps)
+
+	if delta > 0:
+		# Expanding a lump, so start from last lump and work backwards
+		ordered_lumps.reverse()
+
+	updated_gamelump_data = [b""] * num_gamelumps
+
+	for index in ordered_lumps:
+		(id, flags, version, offset, length) = struct.unpack_from(
+			bsp.LUMP_GAMELUMPS_DIRENT_FMT,
+			gamelump_data,
+			index * struct.calcsize(bsp.LUMP_GAMELUMPS_DIRENT_FMT))
+
+		bsp_file.seek(offset)
+		data = bsp_file.read(length)
+
+		bsp_file.seek(offset + delta)
+		bsp_file.write(data)
+
+		updated_gamelump_data[index] = struct.pack(
+			bsp.LUMP_GAMELUMPS_DIRENT_FMT,
+			id,
+			flags,
+			version,
+			offset + delta,
+			length)
+
+	return b"".join(updated_gamelump_data)
+
 def __shift_gamelumps(bsp_file, delta):
-	# TODO
-	print(bsp.get_gamelumps(bsp_file))
+	(offset, size, version, lzma_flags) = bsp.get_lump_descriptor(bsp_file, bsp.LUMP_INDEX_GAMELUMPS)
+
+	if lzma_flags:
+		raise NotImplementedError("LZMA-compressed gamelump data is not currently supported")
+
+	if size > 0:
+		bsp_file.seek(offset)
+		num_gamelumps = struct.unpack(bsp.LUMP_GAMELUMPS_FMT, bsp_file.read(struct.calcsize(bsp.LUMP_GAMELUMPS_FMT)))[0]
+		gamelump_data = bsp_file.read(num_gamelumps * struct.calcsize(bsp.LUMP_GAMELUMPS_DIRENT_FMT))
+
+		new_gamelump_data = __shift_gamelump_data(bsp_file, delta, gamelump_data, num_gamelumps)
+
+		if len(new_gamelump_data) != len(gamelump_data):
+			raise AssertionError(
+				f"Expected new gamelump data to be {len(gamelump_data)} bytes in size, " +
+				f"but it was {len(new_gamelump_data)} bytes")
+
+		new_lump_data = struct.pack(bsp.LUMP_GAMELUMPS_FMT, num_gamelumps) + new_gamelump_data
+
+		bsp_file.seek(offset + delta)
+		bsp_file.write(new_lump_data)
+
+	bsp.set_lump_descriptor(bsp_file, bsp.LUMP_INDEX_GAMELUMPS, offset + delta, size, version, lzma_flags)
 
 def adjust_offsets_after_lump(bsp_file, delta, lump_index: int):
 	if delta == 0:
