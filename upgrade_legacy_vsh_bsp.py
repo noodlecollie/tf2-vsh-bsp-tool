@@ -12,15 +12,20 @@ SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
 def parse_args():
 	parser = argparse.ArgumentParser(
 		prog="upgrade_legacy_vsh_bsp",
-		description="Updates a legacy VSH (Arena) map to use the new community VSH game mode.")
+		description="Upgrades a legacy VSH (Arena) map to use the new community VSH game mode.",
+		epilog='By default, the resulting map file name will be suffixed with "_cu" (Community Update).')
 
 	parser.add_argument("map_file",
 		nargs=1,
-		help="Paths to more map file that should be updated.")
+		help="Path to map file that should be upgraded.")
 
 	parser.add_argument("-x", "--no-files",
 		action="store_true",
-		help="Don't add files, just update entities")
+		help="Don't add files, just update entities.")
+
+	parser.add_argument("-s", "--suffix",
+		default="_cu",
+		help="Suffix to append to the output map name. Packaged files that depend on this name will be fixed up automatically.")
 
 	return parser.parse_args()
 
@@ -244,17 +249,6 @@ def process_bsp(map_name: str, bsp_file, args):
 	bsp.validate_bsp_file(bsp_file)
 	bsp.validate_pakfile_lump(bsp_file)
 
-	pakdata_in = io.BytesIO(bsp.get_lump_data(bsp_file, bsp.LUMP_INDEX_PAKFILE))
-	pakdata_out = io.BytesIO(bytes())
-
-	if not args.no_files:
-		print("Compiling new list of embedded files")
-		embedded_file_list = generate_file_list(find_files_in_pak(pakdata_in), find_content_files_on_disk())
-
-		print("Embedding files")
-		add_files_to_pak(embedded_file_list, pakdata_in, pakdata_out, map_name)
-		replace_pak_lump(bsp_file, pakdata_out)
-
 	print("Adjusting entities")
 
 	ent_list = entities.build_entity_list(bsp.get_lump_data(bsp_file, bsp.LUMP_INDEX_ENTITIES))
@@ -268,10 +262,21 @@ def process_bsp(map_name: str, bsp_file, args):
 
 		print(f"Entities lump size changed by {'+' if ent_data_size_delta >= 0 else ''}{ent_data_size_delta} bytes")
 
-		lump_adjustment.adjust_offsets_after_lump(bsp_file, ent_data_size_delta, bsp.LUMP_INDEX_ENTITIES)
+		lump_adjustment.resize_lump(bsp_file, bsp.LUMP_INDEX_ENTITIES, ent_data_size_delta)
 
 		print("Writing new entities lump")
 		write_new_entities_lump(bsp_file, ent_data, ent_orig_length)
+
+	if not args.no_files:
+		pakdata_in = io.BytesIO(bsp.get_lump_data(bsp_file, bsp.LUMP_INDEX_PAKFILE))
+		pakdata_out = io.BytesIO(bytes())
+
+		print("Compiling new list of embedded files")
+		embedded_file_list = generate_file_list(find_files_in_pak(pakdata_in), find_content_files_on_disk())
+
+		print("Embedding files")
+		add_files_to_pak(embedded_file_list, pakdata_in, pakdata_out, map_name)
+		replace_pak_lump(bsp_file, pakdata_out)
 
 def process_file(args):
 	map_file = args.map_file[0]
@@ -282,7 +287,7 @@ def process_file(args):
 
 	print(f"Patching {map_file}")
 
-	map_name = os.path.splitext(os.path.basename(map_file))[0]
+	(map_name, map_ext) = os.path.splitext(os.path.basename(map_file))
 
 	with open(map_file, "rb") as bsp_file:
 		data = bsp_file.read()
@@ -291,7 +296,7 @@ def process_file(args):
 		bsp_file = io.BytesIO(data)
 		process_bsp(map_name, bsp_file, args)
 
-		output_name = os.path.join(os.path.dirname(map_file), f"{map_name}_cu.bsp")
+		output_name = os.path.join(os.path.dirname(map_file), f"{map_name}{args.suffix}{map_ext}")
 
 		print(f"Writing {output_name}")
 
