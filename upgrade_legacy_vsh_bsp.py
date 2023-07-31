@@ -272,10 +272,6 @@ def process_bsp(map_name: str, bsp_file):
 		print("Writing new entities lump")
 		write_new_entities_lump(bsp_file, ent_data, ent_orig_length)
 
-	# TODO: Remove after testing
-	with open("test.bsp", "wb") as outfile:
-		outfile.write(bsp_file.getbuffer())
-
 def process_file(map_file: str):
 	if not os.path.isfile(map_file):
 		print(f"Map {map_file} does not exist")
@@ -289,7 +285,16 @@ def process_file(map_file: str):
 		data = bsp_file.read()
 
 	try:
-		process_bsp(map_name, io.BytesIO(data))
+		bsp_file = io.BytesIO(data)
+		process_bsp(map_name, bsp_file)
+
+		output_name = os.path.join(os.path.dirname(map_file), f"{map_name}_cu.bsp")
+
+		print(f"Writing {output_name}")
+
+		with open(output_name, "wb") as outfile:
+			outfile.write(bsp_file.getbuffer())
+
 	except Exception as ex:
 		print(f"An error occured while processing the file. {ex}")
 		traceback.print_exception(ex)
