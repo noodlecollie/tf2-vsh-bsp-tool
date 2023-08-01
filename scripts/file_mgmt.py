@@ -200,13 +200,13 @@ def resolve_names(file_list, old_map_name, new_map_name):
 			# materials/maps/map_name/
 			if dirname.startswith(cubemap_path_prefix):
 				if re_cubemap.match(basename):
-					new_path = new_cubemap_path_prefix + item.out_pak_path[len(cubemap_path_prefix):]
-
 					if extension == ".vmt":
 						item.patch_function = __patch_cubemap_vmt_data
 
 						# Replace the map name in the expected paths only (ie. match the surrounding separators too)
 						item.patch_replacements = {"$envmap": (f"/{old_map_name}/", f"/{new_map_name}/")}
+					else:
+						new_path = new_cubemap_path_prefix + item.out_pak_path[len(cubemap_path_prefix):]
 
 		if new_path is not None:
 			item.out_pak_path = new_path
