@@ -158,10 +158,11 @@ def resolve_names(file_list, old_map_name, new_map_name):
 			elif dirname.startswith(soundscape_path_prefix):
 				if item.basename_matches_prefix(old_map_name, "soundscapes_"):
 					new_path = os.path.join(dirname, f"soundscapes_{new_map_name}{extension}")
-		# materials/maps/map_name/
-		elif dirname.startswith(cubemap_path_prefix):
-			if re_cubemap.match(basename):
-				new_path = new_cubemap_path_prefix + item.out_pak_path[len(cubemap_path_prefix):]
+		elif extension == ".vtf":
+			# materials/maps/map_name/
+			if dirname.startswith(cubemap_path_prefix):
+				if re_cubemap.match(basename):
+					new_path = new_cubemap_path_prefix + item.out_pak_path[len(cubemap_path_prefix):]
 
 		if new_path is not None:
 			item.out_pak_path = new_path
