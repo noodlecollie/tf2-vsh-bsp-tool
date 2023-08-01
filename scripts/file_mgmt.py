@@ -78,8 +78,40 @@ def __create_multi_source_file(existing_file: PakFile, new_file: PakFile):
 		existing_file.in_pak_path = new_file.in_pak_path
 
 def __merge_level_sounds_txt_data(existing_data: bytes, new_data: bytes):
-	# TODO: This needs to be better. We need to remove duplicated objects after concatenation!
-	return existing_data + b'\n' + new_data
+	try:
+		new_objects = { item[0]: item for item in keyvalues.find_all_root_objects(new_data) }
+	except ValueError as ex:
+		raise ValueError(f"{ex} in the VSH game mode's level_sounds.txt")
+
+	offset = 0
+	allowed_existing_objects = []
+
+	while True:
+		try:
+			existing_object = keyvalues.find_root_object(existing_data, offset)
+			print(existing_object)
+		except ValueError as ex:
+			raise ValueError(f"{ex} in the map's existing level_sounds.txt")
+
+		if existing_object[0] is None:
+			break
+
+		# Ignore if this data exists in the incoming data - new data takes precedence.
+		if existing_object[0] not in new_objects:
+			allowed_existing_objects.append(existing_object)
+
+		offset = existing_object[2] + 1
+
+	output = []
+
+	for (key, opening_brace, closing_brace) in allowed_existing_objects:
+		output.append(b'"' + key + b'"\n' + existing_data[opening_brace:(closing_brace + 1)] + b'\n')
+
+	for dictkey in new_objects.keys():
+		(key, opening_brace, closing_brace) = new_objects[dictkey]
+		output.append(b'"' + key + b'"\n' + new_data[opening_brace:(closing_brace + 1)] + b'\n')
+
+	return b'\n'.join(output)
 
 def __merge_particles_txt_data(existing_data: bytes, new_data: bytes):
 	# For particles, we need to merge the two particles_manifest objects together.
@@ -111,13 +143,13 @@ def __merge_particles_txt_data(existing_data: bytes, new_data: bytes):
 
 	try:
 		(existing_particle_entries, _) = keyvalues.extract_single_depth_properties(existing_data, existing_manifest + len(ENTRY_NAME))
-	except RuntimeError as ex:
-		raise RuntimeError(f"{ex} in map's existing particles.txt")
+	except ValueError as ex:
+		raise ValueError(f"{ex} in map's existing particles.txt")
 
 	try:
 		(new_particle_entries, _) = keyvalues.extract_single_depth_properties(new_data, new_manifest + len(ENTRY_NAME))
-	except RuntimeError as ex:
-		raise RuntimeError(f"{ex} in the VSH game mode's particles.txt")
+	except ValueError as ex:
+		raise ValueError(f"{ex} in the VSH game mode's particles.txt")
 
 	combined_entries = existing_particle_entries + new_particle_entries
 	keyvalues.remove_duplicate_values(combined_entries)

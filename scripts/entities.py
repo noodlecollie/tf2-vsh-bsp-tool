@@ -7,8 +7,8 @@ def build_entity_list(ent_data: bytes):
 	while True:
 		try:
 			(property_list, next_offset) = keyvalues.extract_single_depth_properties(ent_data, base_offset)
-		except RuntimeError as ex:
-			raise RuntimeError(f"{ex} for entity {len(ent_list)}")
+		except ValueError as ex:
+			raise ValueError(f"{ex} for entity {len(ent_list)}")
 
 		if next_offset < 1:
 			# We reached the end.

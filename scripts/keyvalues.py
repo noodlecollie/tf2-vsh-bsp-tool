@@ -7,7 +7,7 @@ def extract_single_depth_properties(data: bytes, base_offset: int = 0):
 	end_brace = data.find(b'}', begin_brace + 1)
 
 	if end_brace < 0:
-		raise RuntimeError(f"Unterminated keyvalues object encountered")
+		raise ValueError(f"Unterminated keyvalues object encountered")
 
 	kvobject = data[(begin_brace + 1):end_brace]
 
@@ -29,17 +29,17 @@ def extract_single_depth_properties(data: bytes, base_offset: int = 0):
 		second_quote = prop.find(b'"', first_quote + 1)
 
 		if second_quote < 0:
-			raise RuntimeError(f"Unterminated property key encountered")
+			raise ValueError(f"Unterminated property key encountered")
 
 		third_quote = prop.find(b'"', second_quote + 1)
 
 		if third_quote < 0:
-			raise RuntimeError(f"Property without value encountered")
+			raise ValueError(f"Property without value encountered")
 
 		fourth_quote = prop.find(b'"', third_quote + 1)
 
 		if fourth_quote < 0:
-			raise RuntimeError(f"Unterminated property value encountered")
+			raise ValueError(f"Unterminated property value encountered")
 
 		key = prop[(first_quote + 1):second_quote].decode("latin-1")
 		value = prop[(third_quote + 1):fourth_quote].decode("latin-1")
@@ -82,3 +82,86 @@ def remove_duplicate_values(props_list):
 		else:
 			encountered_values[prop[1]] = True
 			index += 1
+
+def find_opening_and_closing_braces(data: bytes, offset: int = 0):
+	opening_index = data.find(b'{', offset)
+
+	if opening_index < 0:
+		return (-1, -1)
+
+	closing_index = opening_index + 1
+	depth = 1
+
+	while closing_index < len(data):
+		value = data[closing_index]
+
+		# This is not actually a character or a string - it's a number.
+		# The easiest way to check it is just to index the byte strings
+		# like below to retrieve the character value.
+		if value == b'{'[0]:
+			depth += 1
+		elif value == b'}'[0]:
+			depth -= 1
+
+		if depth == 0:
+			return (opening_index, closing_index)
+
+		closing_index += 1
+
+	return (-1, -1)
+
+def find_root_key(data: bytes, offset: int = 0):
+	first_quote = data.find(b'"', offset)
+
+	if first_quote < 0:
+		return (None, -1)
+
+	second_quote = data.find(b'"', first_quote + 1)
+
+	if second_quote < 0:
+		raise ValueError("Unterminated quoted key encountered")
+
+	return (data[(first_quote + 1):second_quote], second_quote + 1)
+
+def find_root_object(data: bytes, offset: int):
+	(key, continue_from) = find_root_key(data, offset)
+
+	if key is None:
+		return (None, -1, -1)
+
+	(opening, closing) = find_opening_and_closing_braces(data, continue_from)
+
+	if opening < 0:
+		raise ValueError("Root key encountered without corresponding object")
+
+	return (key, opening, closing)
+
+def find_all_root_keys(data: bytes):
+	key_list = []
+	offset = 0
+
+	while True:
+		(key, _, closing_brace) = find_root_object(data, offset)
+
+		if key is None:
+			break
+
+		key_list.append(key)
+		offset = closing_brace + 1
+
+	return key_list
+
+def find_all_root_objects(data: bytes):
+	object_list = []
+	offset = 0
+
+	while True:
+		object = find_root_object(data, offset)
+
+		if object[0] is None:
+			break
+
+		object_list.append(object)
+		offset = object[2] + 1
+
+	return object_list
