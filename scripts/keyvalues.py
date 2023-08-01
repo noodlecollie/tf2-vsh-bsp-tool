@@ -69,3 +69,16 @@ def get_first_value(props_list, key:str, default_val = None):
 	index = find(props_list, key, 0)
 
 	return props_list[index][1] if index >= 0 else default_val
+
+def remove_duplicate_values(props_list):
+	index = 0
+	encountered_values = {}
+
+	while index < len(props_list):
+		prop = props_list[index]
+
+		if prop[1] in encountered_values:
+			del props_list[index]
+		else:
+			encountered_values[prop[1]] = True
+			index += 1
