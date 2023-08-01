@@ -89,7 +89,6 @@ def __merge_level_sounds_txt_data(existing_data: bytes, new_data: bytes):
 	while True:
 		try:
 			existing_object = keyvalues.find_root_object(existing_data, offset)
-			print(existing_object)
 		except ValueError as ex:
 			raise ValueError(f"{ex} in the map's existing level_sounds.txt")
 
