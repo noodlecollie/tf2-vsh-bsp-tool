@@ -108,7 +108,7 @@ class BraveJumpTrait extends BossTrait
             background = TF_TEAM_BOSS,
             display_to_team = TF_TEAM_BOSS
         });
-        EntFireByHandle(text_tf, "Display", "", 0, player, player);
+        EntFireByHandle(text_tf, "Display", "", 0.1, player, player);
         EntFireByHandle(text_tf, "Kill", "", 1, player, player);
     }
 };

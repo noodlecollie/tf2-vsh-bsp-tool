@@ -1,0 +1,6 @@
+Objective:
+As Mercenaries, defeat Saxton Hale.
+As Saxton Hale, get rid of those pesky Mercenaries.
+
+Other Notes:
+Mercenaries can climb up walls by hitting them with their melee weapons.

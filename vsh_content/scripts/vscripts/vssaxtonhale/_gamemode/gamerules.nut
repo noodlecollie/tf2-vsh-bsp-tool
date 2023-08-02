@@ -21,6 +21,7 @@ function SetConvars()
     Convars.SetValue("mp_disable_respawn_times", 0);
     Convars.SetValue("mp_respawnwavetime", 999999);
     Convars.SetValue("tf_classlimit", 0);
+    Convars.SetValue("cl_use_tournament_specgui", 0);
     Convars.SetValue("mp_forcecamera", 0);
     Convars.SetValue("sv_alltalk", 1);
     Convars.SetValue("tf_dropped_weapon_lifetime", 0);

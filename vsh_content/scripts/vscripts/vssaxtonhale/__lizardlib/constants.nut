@@ -32,7 +32,7 @@ foreach (c in [
 ::TF_TEAM_BOSS <- TF_TEAM_BLUE;
 ::TF_TEAM_BOSSES <- TF_TEAM_BLUE;
 ::TF_CLASS_HEAVY <- TF_CLASS_HEAVYWEAPONS;
-::MAX_PLAYERS <- Constants.Server.MAX_PLAYERS;
+::MAX_PLAYERS <- MaxClients().tointeger();
 
 ::TF_CLASS_NAMES <- [
     "generic",
