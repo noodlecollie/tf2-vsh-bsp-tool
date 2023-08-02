@@ -1,7 +1,9 @@
 TF2 VSH BSP Tool
 ================
 
-This tool can be used to update legacy TF2 VSH maps to use the new VSH game mode that operates using VScripts.
+This tool can be used to update legacy TF2 VSH maps to use the [new VSH game mode](https://tf2maps.net/downloads/vs-saxton-hale-vscript.15067/) that operates using VScripts.
+
+Credits go to the creators of the VSH mode (specifically LizardOfOz). This script doesn't do anything new in terms of the mode - it simply repackages it into maps.
 
 ## Requirements
 
