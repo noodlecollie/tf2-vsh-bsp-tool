@@ -27,6 +27,10 @@ def parse_args():
 		default="_cu",
 		help="Suffix to append to the output map name. Packaged files that depend on this name will be fixed up automatically.")
 
+	parser.add_argument("-f", "--overwrite-output",
+		action="store_true",
+		help="Unless set, any output file named the same as the file this script would produce will not be overwritten.")
+
 	group = parser.add_argument_group("Mode Settings")
 
 	group.add_argument("--setting-boss-scale",
@@ -155,12 +159,17 @@ def args_to_settings(args):
 	return settings
 
 def remove_unneeded_entities(ent_list):
-	removed = entities.remove_entities_matching_all(ent_list, classname="tf_logic_arena")
+	removed_arena = entities.remove_entities_matching_all(ent_list, classname="tf_logic_arena")
 
-	if removed:
+	if removed_arena:
 		print("Removed tf_logic_arena")
 
-	return removed
+	removed_koth = entities.remove_entities_matching_all(ent_list, classname="tf_logic_koth")
+
+	if removed_koth:
+		print("Removed tf_logic_koth")
+
+	return removed_arena or removed_koth
 
 def add_required_entities(ent_list, args):
 	changed = False
@@ -176,7 +185,7 @@ def add_required_entities(ent_list, args):
 			changed = True
 		elif entity[targetname_index][1] != "tf_gamerules":
 			print(f'Updating tf_gamerules targetname for VSH from "{entity[targetname_index][1]}"')
-			entity[targetname_index][1] = "tf_gamerules"
+			entity[targetname_index] = ("targetname", "tf_gamerules")
 			changed = True
 	else:
 		print("Adding tf_gamerules for VSH")
@@ -267,6 +276,17 @@ def process_bsp(old_map_name: str, new_map_name: str, bsp_file, args):
 		file_mgmt.add_files_to_pak(resolved_files, pakdata_in, pakdata_out)
 		replace_pak_lump(bsp_file, pakdata_out)
 
+def compute_new_map_name(old_map_name, suffix):
+	old_map_name_segments = old_map_name.split("_")
+
+	if len(old_map_name_segments) > 1:
+		if old_map_name_segments[0].lower() != "vsh":
+			old_map_name_segments[0] = "vsh"
+
+		return f"{'_'.join(old_map_name_segments)}{suffix}"
+	else:
+		new_map_name = f"vsh_{old_map_name}{suffix}"
+
 def process_file(args):
 	map_file = args.map_file[0]
 
@@ -277,7 +297,18 @@ def process_file(args):
 	print(f"Patching {map_file}")
 
 	(old_map_name, map_ext) = os.path.splitext(os.path.basename(map_file))
-	new_map_name = f"{old_map_name}{args.suffix}"
+	new_map_name = compute_new_map_name(old_map_name, args.suffix)
+
+	output_name = os.path.join(os.path.dirname(map_file), f"{new_map_name}{map_ext}")
+
+	if os.path.isdir(output_name):
+		print(f"Cannout create output file named {output_name}: a directory already exists with this name.")
+		return False
+
+	if os.path.isfile(output_name):
+		if not args.overwrite_output:
+			print(f"Cannot write {output_name}: a file with this name already exists. Pass -f/--overwrite-output to force an overwrite.")
+			return False
 
 	with open(map_file, "rb") as bsp_file:
 		data = bsp_file.read()
@@ -286,9 +317,15 @@ def process_file(args):
 		bsp_file = io.BytesIO(data)
 		process_bsp(old_map_name, new_map_name, bsp_file, args)
 
-		output_name = os.path.join(os.path.dirname(map_file), f"{new_map_name}{map_ext}")
-
 		print(f"Writing {output_name}")
+
+		# Check again, in case anything changed on the filesystem since the first time we checked.
+		if os.path.isfile(output_name):
+			if not args.overwrite_output:
+				print(f"Cannot write {output_name}: a file with this name already exists. Pass -f/--overwrite-output to force an overwrite.")
+				return False
+			else:
+				print(f"File {output_name} already exists, overwriting.")
 
 		with open(output_name, "wb") as outfile:
 			outfile.write(bsp_file.getbuffer())

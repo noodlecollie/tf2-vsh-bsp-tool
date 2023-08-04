@@ -218,6 +218,8 @@ def resolve_names(file_list, old_map_name, new_map_name):
 				elif item.basename_matches_suffix(old_map_name, "_particles"):
 					new_path = os.path.join(dirname, f"{new_map_name}_particles{extension}")
 					item.merge_function = __merge_particles_txt_data
+				elif item.basename_matches_suffix(old_map_name, "_english"):
+					new_path = os.path.join(dirname, f"{new_map_name}_english{extension}")
 			# particles/
 			elif dirname.startswith(particles_path_prefix):
 				if item.basename_matches_suffix(old_map_name, "_manifest"):
