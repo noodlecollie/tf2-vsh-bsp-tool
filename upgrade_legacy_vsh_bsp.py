@@ -95,6 +95,7 @@ def create_logic_script_entity():
 		("classname", "logic_script"),
 		("targetname", "logic_script_vsh"),
 		("vscripts", "vssaxtonhale/vsh.nut"),
+		("thinkfunction", "Tick"),
 		("origin", "0 0 0")
 	]
 
